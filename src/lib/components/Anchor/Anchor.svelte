@@ -6,7 +6,15 @@
 	import { writable, get } from 'svelte/store';
 	import { createEdge, createAnchor, generateOutput } from '$lib/utils/creators';
 	import { createEventDispatcher } from 'svelte';
-	import type { Graph, Node, Connections, CSSColorString, EdgeStyle, EdgeConfig } from '$lib/types';
+	import type {
+		Graph,
+		Node,
+		Connections,
+		CSSColorString,
+		EdgeStyle,
+		EdgeConfig,
+		ConnectEdges
+	} from '$lib/types';
 	import type { Anchor, Direction, AnchorKey, CustomWritable } from '$lib/types';
 	import type { InputType, NodeKey, OutputStore, InputStore, ConnectingFrom } from '$lib/types';
 	import type { ComponentType } from 'svelte';
@@ -101,6 +109,7 @@
 	let previousConnectionCount = 0;
 	let type: InputType = input === output ? null : input ? 'input' : 'output';
 	let assignedConnections: Connections = [];
+	let assignedEdges: ConnectEdges = [];
 
 	const nodeEdge = node.edge;
 	const anchors = node.anchors;
@@ -108,6 +117,7 @@
 	const resizingHeight = node.resizingHeight;
 	const rotating = node.rotating;
 	const nodeLevelConnections = node.connections;
+	const nodeLevelEdges = node.edges;
 
 	$: connecting = $connectingFrom?.anchor === anchor;
 	$: connectedAnchors = anchor && anchor.connected;
@@ -152,6 +162,22 @@
 				}
 			});
 			$nodeLevelConnections = remainingConnections;
+		}
+		if ($nodeLevelEdges?.length && !input) {
+			const remainingEdges: ConnectEdges = [];
+			let first: number | null = null;
+			$nodeLevelEdges.forEach((nodeLevelEdge, idx) => {
+				if (!nodeLevelEdge) return;
+				if (first === null) first = idx;
+
+				if ((idx - first) % outputCount === 0) {
+					assignedEdges.push(nodeLevelEdge);
+					remainingEdges.push(null);
+				} else {
+					remainingEdges.push(nodeLevelEdge);
+				}
+			});
+			$nodeLevelEdges = remainingEdges;
 		}
 		$anchorsMounted++;
 	});
@@ -349,6 +375,24 @@
 		return true;
 	}
 
+	function connectPredefinedEdge(source: Anchor, target: Anchor, edgeData?: unknown) {
+		// Don't connect an anchor to itself
+		if (source === target) return false;
+		// Don't connect if the anchors are already connected
+		if (get(source.connected).has(anchor)) return false;
+		const edgeConfig: EdgeConfig = {
+			color: edgeColor,
+			label: { text: edgeLabel },
+			data: edgeData
+		};
+
+		if (edgeStyle) edgeConfig.type = edgeStyle;
+		const newEdge = createEdge({ source, target }, source?.edge || null, edgeConfig);
+		if (!source.node || !target.node) return false;
+		edgeStore.add(newEdge, new Set([source, target, source.node, target.node]));
+		return true;
+	}
+
 	// If both anchors have stores, we "link" them
 	function connectStores() {
 		if (input && $connectingFrom && $connectingFrom.store) {
@@ -436,6 +480,14 @@
 		assignedConnections = assignedConnections.filter((connection) => connection !== null);
 	}
 
+	function checkNodeLevelEdges() {
+		assignedEdges.forEach((edge, index) => {
+			if (!edge) return;
+			const isApplied = processEdge(edge);
+		});
+		assignedEdges = assignedEdges.filter((edge) => edge !== null);
+	}
+
 	function checkDirectConnections() {
 		connections.forEach((connection, index) => {
 			if (!connection) return;
@@ -494,6 +546,54 @@
 		}
 
 		connectAnchors(anchor, anchorToConnect);
+
+		if (anchorToConnect.store && (inputsStore || outputStore)) {
+			if (input && anchorToConnect.type === 'output') {
+				if (
+					$inputsStore &&
+					key &&
+					inputsStore &&
+					typeof inputsStore.set === 'function' &&
+					typeof inputsStore.update === 'function'
+				)
+					$inputsStore[key] = anchorToConnect.store;
+			} else if (output && anchorToConnect.type === 'input') {
+				const { store, inputKey } = anchorToConnect;
+				if (store && inputKey && typeof store.update === 'function')
+					store.update((store) => {
+						if (!outputStore) return store;
+						store[inputKey] = outputStore;
+						return store;
+					});
+			}
+		}
+		return true;
+	};
+
+	const processEdge = ({
+		source: nodeId,
+		target: anchorId,
+		data: edgeData
+	}: NonNullable<ConnectEdges[number]>) => {
+		let anchorToConnect: Anchor | null = null;
+
+		//Convert to node key used in store/DOM
+		const nodekey: NodeKey = `N-${nodeId}`;
+		// Look up node in store
+		const nodeToConnect = nodeStore.get(nodekey);
+		if (!nodeToConnect) {
+			return false;
+		}
+		// Create anchor key
+		const anchorKey: AnchorKey = `A-${anchorId}/${nodekey}`;
+		// Look up anchor in store
+		anchorToConnect = nodeToConnect.anchors.get(anchorKey) || null;
+
+		if (!anchorToConnect) {
+			return false;
+		}
+
+		connectPredefinedEdge(anchor, anchorToConnect, edgeData);
 
 		if (anchorToConnect.store && (inputsStore || outputStore)) {
 			if (input && anchorToConnect.type === 'output') {

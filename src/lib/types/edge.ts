@@ -13,7 +13,7 @@ import type { ComponentType } from 'svelte';
 export type EdgeStyle = 'straight' | 'step' | 'bezier';
 
 // With writable properties
-export type WritableEdge = {
+export type WritableEdge<TData = unknown> = {
 	id: EdgeKey;
 	source: Anchor | CursorAnchor;
 	target: Anchor | CursorAnchor;
@@ -28,6 +28,7 @@ export type WritableEdge = {
 	disconnect?: true;
 	component: ComponentType | null;
 	rendered: Writable<boolean>;
+	data?: TData;
 	// raiseEdgeOnSelect?: boolean;
 	// edgesAbove?: boolean;
 };
@@ -73,7 +74,7 @@ export interface EdgeLabel {
 	borderRadius: Writable<number>;
 }
 
-export interface EdgeConfig {
+export interface EdgeConfig<TData = unknown> {
 	type?: EdgeStyle;
 	color?:
 		| Writable<CSSColorString | null>
@@ -85,6 +86,7 @@ export interface EdgeConfig {
 	disconnect?: true;
 	raiseEdges?: boolean;
 	edgesAbove?: boolean;
+	data?: TData;
 }
 
 export interface EdgeLabelConfig {
@@ -104,3 +106,9 @@ export type StepDirection = 'left' | 'right' | 'up' | 'down';
 export type ArcKey = '1001' | '0110' | '100-1' | '0-110' | '-1001' | '0110' | '-100-1' | '0-110';
 
 export type Connections = Array<[string | number, string | number] | string | number | null>;
+
+export type ConnectEdges<TData = unknown> = ({
+	source: string | number;
+	target: string | number;
+	data?: TData;
+} | null)[];

@@ -1,5 +1,12 @@
 import type { Writable } from 'svelte/store';
-import type { AnchorStore, CSSDimensionString, InitialDimensions, Connections, Direction } from '.';
+import type {
+	AnchorStore,
+	CSSDimensionString,
+	InitialDimensions,
+	Connections,
+	Direction,
+	ConnectEdges
+} from '.';
 import type { XYPair, NodeKey, Dimensions, CSSColorString, GroupKey } from '.';
 import type { ComponentType } from 'svelte';
 // This defines an interface for the actual node object that is used in the graph/stores
@@ -37,6 +44,7 @@ export interface Node {
 	borderRadius: Writable<number>;
 	borderWidth: Writable<number>;
 	connections: Writable<Connections>;
+	edges: Writable<ConnectEdges>;
 	bgColor: Writable<CSSColorString | null>;
 	borderColor: Writable<CSSColorString | null>;
 	selectionColor: Writable<CSSColorString | null>;

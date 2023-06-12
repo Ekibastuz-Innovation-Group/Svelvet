@@ -5,7 +5,7 @@
 	import { createNode } from '$lib/utils';
 	import { getContext, onDestroy, onMount, setContext } from 'svelte';
 	import type { ComponentType } from 'svelte';
-	import type { NodeKey, Anchor, AnchorKey } from '$lib/types';
+	import type { NodeKey, Anchor, AnchorKey, ConnectEdges } from '$lib/types';
 	import type { Graph, Node as NodeType, NodeConfig, GroupKey } from '$lib/types';
 	import type { Connections, CSSColorString, InitialDimensions } from '$lib/types';
 </script>
@@ -169,6 +169,11 @@
 		node.connections.set([connections]);
 	}
 
+	function connectEdges(payload: ConnectEdges) {
+		if (!node) return;
+		node.edges.set(payload);
+	}
+
 	function disconnect(connections: number | string | Connections) {
 		if (!node) return;
 		const adjustedConnections = Array.isArray(connections) ? connections : [connections];
@@ -269,7 +274,7 @@
 		let:selected
 		let:grabHandle
 	>
-		<slot {selected} {grabHandle} {disconnect} {connect} {node} {destroy}>
+		<slot {selected} {grabHandle} {disconnect} {connect} {connectEdges} {node} {destroy}>
 			<DefaultNode {selected} on:connection on:disconnection />
 		</slot>
 	</InternalNode>

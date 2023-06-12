@@ -62,6 +62,7 @@
 	const targetNodePositionStore = target.node?.position;
 	const edgeType = edge.type;
 	const edgeKey = edge.id;
+	const edgeData = edge.data;
 
 	// Reactive variables
 	let path: string;
@@ -305,7 +306,7 @@
 			on:mousedown={edgeClick}
 			bind:this={DOMPath}
 		/>
-		<slot {path} {destroy}>
+		<slot {path} {destroy} {edgeData}>
 			<path
 				id={edgeKey}
 				class="edge"
