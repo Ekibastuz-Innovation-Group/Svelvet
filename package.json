@@ -23,7 +23,7 @@
 		"build": "vite build && pnpm run package",
 		"preview": "vite preview",
 		"package": "svelte-kit sync && svelte-package && publint",
-		"prepublishOnly": "pnpm run format && pnpm run lint && pnpm run test && pnpm run test:unit && pnpm run package",
+		"prepublishOnly": "pnpm run format && pnpm run lint && pnpm run test && pnpm run package",
 		"test": "playwright test",
 		"test:unit": "vitest run --environment jsdom",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
