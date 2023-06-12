@@ -92,6 +92,7 @@
 	 */
 	export let dynamic = false;
 	export let title = '';
+	export let extraClass = '';
 
 	//External stores
 	const nodes = graph.nodes;
@@ -259,6 +260,7 @@
 		activeGroup={graph.activeGroup}
 		editing={graph.editing}
 		initialNodePositions={graph.initialNodePositions}
+		{extraClass}
 		on:nodeClicked
 		on:nodeMount
 		on:nodeReleased

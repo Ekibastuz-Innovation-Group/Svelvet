@@ -34,6 +34,7 @@
 	export let editing: Graph['editing'];
 	export let dimensionsProvided = false;
 	export let title: string;
+	export let extraClass: string;
 
 	// Local stores
 	const anchorsMounted = writable(0);
@@ -240,7 +241,7 @@
 {#if !hidden}
 	<div
 		{id}
-		class="svelvet-node"
+		class={`svelvet-node ${extraClass}`}
 		class:selected
 		class:locked={$locked || $nodeLock}
 		style:top="{actualPosition.y}px"
