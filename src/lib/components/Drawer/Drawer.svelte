@@ -1,15 +1,8 @@
 <script lang="ts">
-	import { Node, Svelvet, Anchor } from '$lib';
-	import type {
-		SvelvetConfig,
-		NodeConfig,
-		XYPair,
-		EdgeStyle,
-		AnchorDrawerConfig
-	} from '$lib/types';
+	import { Node, Svelvet, Anchor, Edge } from '$lib';
+	import type { SvelvetConfig, NodeConfig, XYPair, EdgeStyle, NodeDrawerConfig } from '$lib/types';
 	import type { ComponentType } from 'svelte';
-	import { defaultNodePropsStore, customNodePropsStore } from './DrawerNode.svelte';
-	import { anchorPropsStore } from './DrawerAnchor.svelte';
+	import { defaultNodePropsStore } from './DrawerNode.svelte';
 
 	// Props
 	export let width = 0;
@@ -35,7 +28,7 @@
 	export let toggle = false;
 
 	// Store props in object to be passed to svelvet
-	const sveltetProps: SvelvetConfig = {
+	const svelvetProps: SvelvetConfig = {
 		width,
 		height,
 		minimap,
@@ -60,23 +53,17 @@
 	};
 
 	// Array of default and custom nodes, anchors
-	let defaultNodes: NodeConfig[] = [];
-	let customNodes: NodeConfig[] = [];
-	let anchors: any = [];
+	let defaultNodes: NodeDrawerConfig[] = [];
 	let dropped_in: boolean;
 
 	// Drag and drop events
 	const handleDragEnter = (): void => {
-		dropped_in = true;
+		if (!dropped_in) dropped_in = true;
 	};
 
 	const handleDragLeave = (): void => {
 		dropped_in = false;
 	};
-
-	// const handleDragEnd = (): void => {
-	// 	dropped_in = false;
-	// };
 
 	const onDragOver = (e: DragEvent): boolean => {
 		e.preventDefault();
@@ -95,31 +82,78 @@
 		target.dispatchEvent(moveEvent);
 
 		defaultNodes = $defaultNodePropsStore;
-		customNodes = $customNodePropsStore;
-		anchors = $anchorPropsStore;
 	};
 </script>
 
 <div
+	role="presentation"
 	class="drop_zone"
 	on:dragenter={handleDragEnter}
 	on:dragleave={handleDragLeave}
 	on:dragover={onDragOver}
 	on:drop={handleDrop}
 >
-	<Svelvet {...sveltetProps} drawer>
-		{#each defaultNodes as node, index}
-			<Node {...node} drop="cursor" />
-		{/each}
-
-		{#each customNodes as customNode, index}
-			<Node {...customNode} drop="cursor">
-				{#each anchors[index] as anchorProp}
-					<div class={anchorProp.direction}>
-						<Anchor {...anchorProp} />
-					</div>
-				{/each}
-			</Node>
+	<Svelvet {...svelvetProps} drawer>
+		{#each defaultNodes as { anchors, edgeProps, ...nodeProps }}
+			{#if anchors}
+				<Node {...nodeProps} drop="cursor">
+					<slot slot="anchorWest">
+						{#each anchors.left as leftAnchorProps}
+							{#if edgeProps}
+								<Anchor {...leftAnchorProps}>
+									<Edge {...edgeProps} slot="edge" />
+								</Anchor>
+							{:else}
+								<Anchor {...leftAnchorProps} />
+							{/if}
+						{/each}
+					</slot>
+					<slot slot="anchorEast">
+						{#each anchors.right as rightAnchorProps}
+							{#if edgeProps}
+								<Anchor {...rightAnchorProps}>
+									<Edge {...edgeProps} slot="edge" />
+								</Anchor>
+							{:else}
+								<Anchor {...rightAnchorProps} />
+							{/if}
+						{/each}
+					</slot>
+					<slot slot="anchorNorth">
+						{#each anchors.top as topAnchorProps}
+							{#if edgeProps}
+								<Anchor {...topAnchorProps}>
+									<Edge {...edgeProps} slot="edge" />
+								</Anchor>
+							{:else}
+								<Anchor {...topAnchorProps} />
+							{/if}
+						{/each}
+					</slot>
+					<slot slot="anchorSouth">
+						{#each anchors.bottom as bottomAnchorProps}
+							{#if edgeProps}
+								<Anchor {...bottomAnchorProps}>
+									<Edge {...edgeProps} slot="edge" />
+								</Anchor>
+							{:else}
+								<Anchor {...bottomAnchorProps} />
+							{/if}
+						{/each}
+					</slot>
+					{#each anchors.self as anchorProps}
+						{#if edgeProps}
+							<Anchor {...anchorProps}>
+								<Edge {...edgeProps} slot="edge" />
+							</Anchor>
+						{:else}
+							<Anchor {...anchorProps} />
+						{/if}
+					{/each}
+				</Node>
+			{:else}
+				<Node {...nodeProps} drop="cursor" />
+			{/if}
 		{/each}
 
 		<slot />
@@ -129,30 +163,3 @@
 		<slot name="toggle" slot="toggle" />
 	</Svelvet>
 </div>
-
-<style>
-	/* Styling for anchor position */
-	.west {
-		transform: translate(-50%);
-		position: absolute;
-		left: 0;
-	}
-
-	.east {
-		transform: translate(50%);
-		position: absolute;
-		right: 0;
-	}
-
-	.north {
-		transform: translate(0, -50%);
-		position: absolute;
-		top: 0;
-	}
-
-	.south {
-		transform: translate(0, 50%);
-		position: absolute;
-		bottom: 0;
-	}
-</style>

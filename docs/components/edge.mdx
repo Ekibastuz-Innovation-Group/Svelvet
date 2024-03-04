@@ -10,7 +10,7 @@ Visualization and interaction behavior can be customized for Edges by creating y
 
 Edges styling can be fully controlled via CSS by passing the expose "path" variable on an HTML Path Element. Custom labels can also be passed via the "label" slot.
 
-Custom Edges are then passed to the "edge" prop of an Anchor component. Any Edge initiated from that Anchor will render out your custom path and label.
+Custom Edges are then passed as children to the Anchor component or via the "edge" prop of an Anchor component. Any Edge initiated from that Anchor will render out your custom path and label.
 
 Edges can also be passed to the Svelvet and Node components, enabling the ability to set a global Edge style which can be overriden at the [Anchor](/components/anchor) or [Node](/components/node) level.
 
@@ -53,7 +53,9 @@ Edges also accept callback functions that run in response to click events on the
 <Svelvet>
     <Node>
         <div class="my-node">
-            <Anchor edge={MyEdge}/>
+            <Anchor />
+				<MyEdge slot="edge"/>
+			<Anchor />
         </div>
     </Node>
 </Svelvet>
@@ -81,17 +83,23 @@ Edges also accept callback functions that run in response to click events on the
 	Color of the edge path.
 </ResponseField>
 <ResponseField name="straight" type="boolean" default="false">
-	Boolean controlling curvate of edge path. Renders edge using "step" logic.
+	Boolean controlling curvate of edge path. Renders edge as straight line.
 </ResponseField>
 
 <ResponseField name="step" type="boolean" default="false">
-	Boolean controlling curvate of edge path. Renders edge as straight line.
+	Boolean controlling curvate of edge path. Renders edge using "step" logic.
 </ResponseField>
 <ResponseField name="cornerRadius" type="number" default="8">
 	Radius of corners when rendering out a step path. Set to 0 for hard corners.
 </ResponseField>
 <ResponseField name="animate" type="boolean" default="false">
 	Renders edge path as a dashed, moving line.
+</ResponseField>
+<ResponseField name="start" type="'arrow' | null" default="null">
+	Adds an arrow to the start of the edge path.
+</ResponseField>
+<ResponseField name="end" type="'arrow' | null" default="null">
+	Adds an arrow to the end of the edge path.
 </ResponseField>
 <ResponseField name="label" type="string">
 	Label text.
@@ -102,12 +110,24 @@ Edges also accept callback functions that run in response to click events on the
 <ResponseField name="textColor" type="CSS Color String" default="theme dependent">
 	Color of the label text.
 </ResponseField>
+<ResponseField name="enableHover" type="boolean" default="false">
+	Allows edges to be highlighted when hovering over them.
+</ResponseField>
+<ResponseField name="labelPosition" type="number" default="0.5">
+	Places the label at a certain position along the Edge path. Defaults to middle. Value must be
+	between 0 and 1.
+</ResponseField>
 
 ## Properties
 
 <ResponseField name="let:path" type="string">
 	The SVG path string used for rendering the edge. Pass to the "d" parameter on your custom path
 	component.
+</ResponseField>
+
+<ResponseField name="let:hovering" type="boolean">
+	True when the cursor is over the Edge element.\
+	<b>Note:</b> You must set ```enableHover``` to true for this value to work.
 </ResponseField>
 
 ## Functions

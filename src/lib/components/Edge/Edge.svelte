@@ -5,7 +5,7 @@
 	import { buildPath, rotateVector } from '$lib/utils/helpers';
 	import { buildArcStringKey, constructArcString } from '$lib/utils/helpers';
 	import { get } from 'svelte/store';
-	import type { CSSColorString, Direction, EdgeStyle, Graph } from '$lib/types';
+	import type { CSSColorString, Direction, EdgeStyle, EndStyle, Graph } from '$lib/types';
 	import type { WritableEdge } from '$lib/types';
 
 	let animationFrameId: number;
@@ -26,6 +26,7 @@
 <script lang="ts">
 	const edgeStore = getContext<Graph['edges']>('edgeStore');
 	const edgeStyle = getContext<EdgeStyle>('edgeStyle');
+	const endStyles = getContext<Array<EndStyle>>('endStyles');
 	const raiseEdgesOnSelect = getContext('raiseEdgesOnSelect');
 	const edgesAboveNode = getContext('edgesAboveNode');
 
@@ -33,9 +34,18 @@
 	export let edge: WritableEdge = getContext<WritableEdge>('edge');
 	export let straight = edgeStyle === 'straight';
 	export let step = edgeStyle === 'step';
+	export let start = endStyles[0];
+	export let end = endStyles[1];
 	export let animate = false;
 	export let label = '';
+	export let enableHover = false;
 	export let edgeClick: null | (() => void) = null;
+	/**
+	 * @default 0.5
+	 * @type number
+	 * @description The position of the label along the edge. 0 is the source, 1 is the target.
+	 */
+	export let labelPosition = 0.5;
 
 	// Styling via props/objects will likely be deprecated
 	export let width: number | null = null;
@@ -67,11 +77,12 @@
 	// Reactive variables
 	let path: string;
 	let DOMPath: SVGPathElement; // The SVG path element used for calculating the midpoint of the curve for labels
-	let pathMidPoint = { x: 0, y: 0 };
+	let labelPoint = { x: 0, y: 0 };
 	let tracking = false; // Boolean that stops/starts tracking the path midpoint
 	let prefersVertical = false;
 	let sourceAbove = false;
 	let sourceLeft = false;
+	let hovering = false;
 	let edgeElement: SVGElement;
 
 	// Reactive declarations
@@ -119,7 +130,7 @@
 
 	// The full SVG path string
 	$: if (!step || edgeKey === 'cursor' || $edgeType === 'bezier') {
-		path = `M ${sourceX}, ${sourceY} ${!straight && controlPointString} ${targetX}, ${targetY}`;
+		path = `M ${sourceX}, ${sourceY} ${!straight ? controlPointString : ''} ${targetX}, ${targetY}`;
 	}
 
 	// We only want to recalculate the path midpoints if the source or target is moving
@@ -179,7 +190,7 @@
 	onMount(() => {
 		setTimeout(() => {
 			if (DOMPath) {
-				pathMidPoint = calculatePath(DOMPath);
+				labelPoint = calculatePath(DOMPath, labelPosition);
 			}
 		}, 0);
 		moveEdge(edgeElement);
@@ -187,7 +198,7 @@
 
 	afterUpdate(() => {
 		if (DOMPath) {
-			pathMidPoint = calculatePath(DOMPath);
+			labelPoint = calculatePath(DOMPath, labelPosition);
 		}
 	});
 
@@ -200,12 +211,12 @@
 	function trackPath() {
 		if (!tracking) return;
 		if (DOMPath) {
-			pathMidPoint = calculatePath(DOMPath);
+			labelPoint = calculatePath(DOMPath, labelPosition);
 		}
 		animationFrameId = requestAnimationFrame(trackPath);
 	}
 
-	function destroy() {
+	export function destroy() {
 		if (source.id === null || target.id === null) return;
 		const edgeKey = edgeStore.match(source, target);
 		edgeStore.delete(edgeKey[0]);
@@ -296,31 +307,62 @@
 
 {#if source && target}
 	<svg class="edges-wrapper" style:z-index={zIndex} bind:this={edgeElement}>
+		{#if start || end}
+			<defs>
+				<marker
+					id={edgeKey + '-end-arrow'}
+					viewBox="0 0 15 15"
+					markerWidth="15"
+					markerHeight="10"
+					refX="12.5"
+					refY="5"
+					orient="auto"
+				>
+					<polygon class="arrow" points="0 0, 15 5, 0 10" style:--prop-edge-color={finalColor} />
+				</marker>
+				<marker
+					id={edgeKey + '-start-arrow'}
+					viewBox="0 0 15 15"
+					markerWidth="15"
+					markerHeight="10"
+					refX="0"
+					refY="5"
+					orient="auto"
+				>
+					<polygon class="arrow" points="0 5, 15 0, 15 10" style:--prop-edge-color={finalColor} />
+				</marker>
+			</defs>
+		{/if}
 		<path
+			role="presentation"
 			id={edgeKey + '-target'}
 			class="target"
-			class:cursor={edgeKey === 'cursor' || !edgeClick}
-			style:cursor={edgeClick ? 'pointer' : 'move'}
-			style:--prop-target-edge-color={edgeClick ? targetColor || null : 'transparent'}
+			class:cursor={edgeKey === 'cursor' || (!edgeClick && !enableHover)}
+			style:cursor={edgeClick || hovering ? 'pointer' : 'move'}
+			style:--prop-target-edge-color={edgeClick || hovering ? targetColor || null : 'transparent'}
 			d={path}
 			on:mousedown={edgeClick}
+			on:mouseenter={() => (hovering = true)}
+			on:mouseleave={() => (hovering = false)}
 			bind:this={DOMPath}
 		/>
-		<slot {path} {destroy} {edgeData}>
+		<slot {path} {destroy} {hovering} {edgeData}>
 			<path
 				id={edgeKey}
 				class="edge"
 				class:animate
 				d={path}
 				style:--prop-edge-color={finalColor}
+				marker-end={end === 'arrow' ? `url(#${edgeKey + '-end-arrow'})` : ''}
+				marker-start={start === 'arrow' ? `url(#${edgeKey + '-start-arrow'})` : ''}
 				style:--prop-stroke-width={width ? width + 'px' : null}
 			/>
 		</slot>
 
 		{#if renderLabel}
-			<foreignObject x={pathMidPoint.x} y={pathMidPoint.y} width="100%" height="100%">
+			<foreignObject x={labelPoint.x} y={labelPoint.y} width="100%" height="100%">
 				<span class="label-wrapper">
-					<slot name="label">
+					<slot name="label" {destroy} {hovering}>
 						<div
 							class="default-label"
 							style:--prop-label-color={labelColor}
@@ -336,6 +378,10 @@
 {/if}
 
 <style>
+	.arrow {
+		fill: var(--prop-edge-color, var(--edge-color, var(--default-edge-color))) !important;
+	}
+
 	.edge {
 		stroke: var(--prop-edge-color, var(--edge-color, var(--default-edge-color)));
 		stroke-width: var(--prop-stroke-width, var(--edge-width, var(--default-edge-width)));
@@ -382,6 +428,7 @@
 	foreignObject {
 		overflow: visible;
 	}
+
 	path {
 		cursor: pointer;
 	}
@@ -397,7 +444,6 @@
 		justify-content: center;
 		align-items: center;
 		width: fit-content;
-		height: 100px;
 		font-size: 1rem;
 		height: 1.5rem;
 		border-radius: 5px;

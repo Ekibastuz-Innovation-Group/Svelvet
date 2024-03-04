@@ -1,18 +1,24 @@
 <script lang="ts">
 	import type { CSSColorString } from '$lib/types';
+	import { getJSONState } from '$lib/utils/savers/saveStore';
 	import { onMount } from 'svelte';
+	import { graphStore } from '$lib/stores';
+	import { get } from 'svelte/store';
 
 	export let main = 'light';
 	export let alt = 'dark';
+	// export let highContrast = 'highContrast';
 	/**
+	 * @deprecated
 	 * @default 'light_mode'
-	 * @description This prop accepts a string that corresponds to the the name of an icon from the Material Icons library.
+	 * @description (Do not use. Will be deprecated in the next major release.) This prop accepts a string that corresponds to the the name of an icon from the Material Icons library.
 	 * @link https://fonts.google.com/icons
 	 */
 	export let mainIcon = 'light_mode';
 	/**
+	 * @deprecated
 	 * @default 'dark_mode'
-	 * @description This prop accepts a string that corresponds to the the name of an icon from the Material Icons library.
+	 * @description (Do not use. Will be deprecated in the next major release.) This prop accepts a string that corresponds to the the name of an icon from the Material Icons library.
 	 *  @link https://fonts.google.com/icons
 	 */
 	export let altIcon = 'dark_mode';
@@ -24,15 +30,51 @@
 
 	function toggleTheme() {
 		const currentTheme = document.documentElement.getAttribute('svelvet-theme');
-		if (!currentTheme) return;
-		const newTheme = currentTheme === main ? alt : main;
+		let newTheme;
+		if (!currentTheme || currentTheme === main) {
+			newTheme = alt;
+		}
+		// else if (currentTheme === alt) {
+		// 	newTheme = highContrast;
+		// }
+		else {
+			newTheme = main;
+		}
 		current = newTheme;
 		document.documentElement.setAttribute('svelvet-theme', currentTheme === main ? alt : main);
+
+		// Save the current theme to Local Storage
+		localStorage.setItem('currentTheme', newTheme);
 	}
 
 	onMount(() => {
-		document.documentElement.setAttribute('svelvet-theme', main);
+		const savedTheme = localStorage.getItem('currentTheme');
+		if (savedTheme) {
+			document.documentElement.setAttribute('svelvet-theme', savedTheme);
+			current = savedTheme;
+		} else {
+			// If no theme is saved in Local Storage, set the default theme (main) as the initial theme
+			document.documentElement.setAttribute('svelvet-theme', main);
+			current = main;
+		}
 	});
+
+	let graph: any;
+
+	graphStore.subscribe((graphMap) => {
+		const graphKey = 'G-1';
+		graph = graphMap.get(graphKey);
+		// console.log('Graph from store:', graph);
+	});
+	function logCurrentGraphState() {
+		const currentGraphMap = get(graphStore);
+		const graph = currentGraphMap.get('G-1');
+		// if (graph) {
+		// 	console.log('Current Graph State:', graph);
+		// } else {
+		// 	console.log('No current graph found');
+		// }
+	}
 </script>
 
 <div
@@ -47,10 +89,24 @@
 	<button on:mousedown|stopPropagation={toggleTheme} on:touchstart|stopPropagation={toggleTheme}>
 		<span class="material-symbols-outlined">{current === main ? altIcon : mainIcon}</span>
 	</button>
+
+	<button
+		class="save-button NW"
+		on:click={() => {
+			getJSONState(graph);
+		}}>Save</button
+	>
 </div>
 
 <style>
 	@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0');
+
+	span {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1.2rem;
+		color: inherit;
+	}
+
 	* {
 		box-sizing: border-box;
 	}
@@ -118,6 +174,14 @@
 		border-bottom: none;
 	}
 	button:hover {
+		cursor: pointer;
+	}
+	.save-button {
+		top: 10px; /* Adjust the top position as needed */
+		left: 10px; /* Adjust the left position as needed */
+		background-color: var(--save-button-bg-color, var(--default-save-button-bg-color));
+		color: var(--save-button-text-color, var(--default-save-button-text-color));
+		border: solid 1px var(--save-button-border-color, var(--default-save-button-border-color));
 		cursor: pointer;
 	}
 </style>

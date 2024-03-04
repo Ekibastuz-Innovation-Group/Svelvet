@@ -95,7 +95,7 @@
 			tracking.set(true);
 			tracking.set(false);
 		}
-		$mounted++;
+		mounted.update((n) => n + 1);
 	});
 
 	onDestroy(() => {
@@ -106,7 +106,7 @@
 			$selectedNodes = $selectedNodes;
 		}
 		// Decrement the store value for mounted nodes
-		$mounted--;
+		mounted.update((n) => n - 1);
 	});
 
 	function toggleSelected() {
@@ -142,7 +142,6 @@
 		if ($zIndex !== $maxZIndex && $zIndex !== Infinity) $zIndex = ++$maxZIndex;
 
 		const targetElement = e.target as HTMLElement; // Cast e.target to HTMLElement
-
 		if (tagsToIgnore.has(targetElement.tagName)) return;
 
 		e.preventDefault();
@@ -237,11 +236,11 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y-non-interactive-element -->
 {#if !hidden}
 	<div
 		{id}
 		class={`svelvet-node ${extraClass}`}
+		role="button"
 		class:selected
 		class:locked={$locked || $nodeLock}
 		style:top="{actualPosition.y}px"
@@ -264,7 +263,7 @@
 		on:contextmenu|preventDefault|stopPropagation
 		on:mouseup={onMouseUp}
 		use:grabHandle
-		tabIndex={0}
+		tabindex={0}
 	>
 		{#if !fixedSizing}
 			<div
@@ -279,10 +278,18 @@
 			<slot {grabHandle} {selected} {destroy} />
 		{/if}
 
-		<div id={`anchors-west-${node.id}`} class="anchors left" />
-		<div id={`anchors-east-${node.id}`} class="anchors right" />
-		<div id={`anchors-north-${node.id}`} class="anchors top" />
-		<div id={`anchors-south-${node.id}`} class="anchors bottom" />
+		<div id={`anchors-west-${node.id}`} class="anchors left">
+			<slot name="anchorWest" />
+		</div>
+		<div id={`anchors-east-${node.id}`} class="anchors right">
+			<slot name="anchorEast" />
+		</div>
+		<div id={`anchors-north-${node.id}`} class="anchors top">
+			<slot name="anchorNorth" />
+		</div>
+		<div id={`anchors-south-${node.id}`} class="anchors bottom">
+			<slot name="anchorSouth" />
+		</div>
 	</div>
 {/if}
 
@@ -316,6 +323,7 @@
 		color: var(--prop-text-color, var(--text-color, var(--default-text-color)));
 		box-shadow: 0 0 0 var(--final-border-width) var(--final-border-color),
 			var(--default-node-shadow);
+		font-family: 'Roboto', sans-serif;
 	}
 	.anchors {
 		/* outline: solid 1px red; */
@@ -360,7 +368,7 @@
 	}
 
 	.locked {
-		cursor: not-allowed;
+		cursor: var(--node-cursor-blocked, var(--default-node-cursor-blocked));
 	}
 	.selected {
 		box-shadow: 0 0 0 var(--final-border-width) var(--final-selection-color),

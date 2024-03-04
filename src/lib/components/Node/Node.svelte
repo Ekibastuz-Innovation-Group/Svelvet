@@ -17,8 +17,9 @@
 	//const storedNode = JSON.parse(localStorage.getItem('state'))?.nodes?[id]
 	/**
 	 * @default { x: 0, y: 0 }
-	 * @description The initial position of the Node. These correspond to pixel values
-	 * at default graph scale. This value does not currently feature two way binding
+	 * @description The position of the Node. These correspond to pixel values
+	 * at default graph scale. This prop newly features two way data binding. Please report any issues
+	 * on GitHub.
 	 */
 	export let position = { x: 0, y: 0 };
 	export let drop: 'cursor' | 'center' | false = false;
@@ -59,7 +60,7 @@
 	export let TD = false;
 	export let LR = false;
 	export let zIndex = 1;
-	export let editable = false;
+	export let editable = true;
 	export let locked = false;
 	export let rotation = 0;
 	export let edge: ComponentType | null = null;
@@ -110,6 +111,8 @@
 		const nodeCount = graph.nodes.count() + 1;
 
 		isDefault = !$$slots.default;
+		if ($$slots.anchorWest || $$slots.anchorEast || $$slots.anchorNorth || $$slots.anchorSouth)
+			isDefault = false;
 
 		const initialDimensions: InitialDimensions = dimensions
 			? dimensions
@@ -159,6 +162,8 @@
 
 		graph.nodes.add(node, node.id);
 	});
+
+	$: node && node.connections.set(connections);
 
 	onDestroy(() => {
 		graph.nodes.delete(node.id);
@@ -233,12 +238,28 @@
 		node.zIndex.set(zIndex);
 	}
 
-	// This is a bit of a hack to get around the fact that the position prop is not two way bindable
-	// Future versions will have an implementation
-	// That uses component instance binding to achieve the same result
 	$: nodePosition = node && node?.position;
+
+	let priorPosition = position;
+
 	$: if (node) {
-		position = $nodePosition;
+		const { x: priorX, y: priorY } = priorPosition;
+		const { x: nodeX, y: nodeY } = $nodePosition;
+		const { x: propX, y: propY } = position;
+
+		const areDifferent = propX !== nodeX || propY !== nodeY;
+
+		const propChanged = propX !== priorX || propY !== priorY;
+
+		if (areDifferent) {
+			if (propChanged) {
+				priorPosition = position;
+				node.position.set(position);
+			} else {
+				priorPosition = $nodePosition;
+				position = $nodePosition;
+			}
+		}
 	}
 	$: if (node) {
 		node.inputs.set(inputs);
@@ -275,7 +296,14 @@
 		let:grabHandle
 	>
 		<slot {selected} {grabHandle} {disconnect} {connect} {connectEdges} {node} {destroy}>
-			<DefaultNode {selected} on:connection on:disconnection />
+      {#if isDefault}
+				<DefaultNode {selected} on:connection on:disconnection />
+			{/if}
 		</slot>
+
+		<slot name="anchorWest" slot="anchorWest" />
+		<slot name="anchorEast" slot="anchorEast" />
+		<slot name="anchorNorth" slot="anchorNorth" />
+		<slot name="anchorSouth" slot="anchorSouth" />
 	</InternalNode>
 {/if}

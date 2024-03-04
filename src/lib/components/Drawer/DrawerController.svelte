@@ -5,6 +5,8 @@
 	import { createNodeProps } from './DrawerNode.svelte';
 	import { createAnchorProps } from './DrawerAnchor.svelte';
 	import { createEdgeProps } from './DrawerEdge.svelte';
+	import Icon from '$lib/assets/icons/Icon.svelte';
+	import { onMount, onDestroy } from 'svelte';
 
 	let isOpen = false;
 	let nodeContainerOpen = false;
@@ -25,11 +27,10 @@
 		e.dataTransfer.dropEffect = 'move';
 
 		// Create props for anchor or edge if values were given
-		const anchorCreated = createAnchorProps(true);
-		const edgeCreated = createEdgeProps(anchorCreated);
-
+		const anchorProps = createAnchorProps(true);
+		const edgeCreated = createEdgeProps();
 		// Create props for node
-		createNodeProps(edgeCreated, anchorCreated);
+		createNodeProps(edgeCreated, anchorProps);
 	};
 
 	const handleDrawer = () => {
@@ -37,12 +38,10 @@
 			isOpen = true;
 			nav.style.height = 'fit-content';
 			nav.style.width = '300px';
-			drawerBtn.innerHTML = '<span class="material-symbols-outlined">north_west</span>';
 		} else {
 			isOpen = false;
 			nav.style.height = '35px';
 			nav.style.width = '35px';
-			drawerBtn.innerHTML = '<span class="material-symbols-outlined">south_east</span>';
 			anchorContainerOpen = false;
 			edgeContainerOpen = false;
 			nodeContainerOpen = false;
@@ -98,6 +97,36 @@
 			anchorBtn.style.borderBottom = 'none';
 		}
 	};
+
+	let currentComponent = 'Node'; // Add this line
+
+	const handleKeyPress = (e: KeyboardEvent) => {
+		if (e.key === 'D') {
+			handleDrawer();
+		} else if (e.key === 'T' && isOpen) {
+			// Only toggle components if the drawer is open
+			if (currentComponent === 'Node') {
+				handleAnchorContainer();
+				currentComponent = 'Anchor';
+			} else if (currentComponent === 'Anchor') {
+				handleEdgeContainer();
+				currentComponent = 'Edge';
+			} else if (currentComponent === 'Edge') {
+				handleNodeContainer();
+				currentComponent = 'Node';
+			}
+		}
+	};
+
+	// Add the event listener when the component mounts
+	onMount(() => {
+		window.addEventListener('keydown', handleKeyPress);
+	});
+
+	// Remove the event listener when the component unmounts
+	onDestroy(() => {
+		window.removeEventListener('keydown', handleKeyPress);
+	});
 </script>
 
 <nav id="drawerWrapper" bind:this={nav}>
@@ -108,7 +137,7 @@
 			on:click={handleDrawer}
 			aria-label="Open/Close Drawer"
 		>
-			<span class="material-symbols-outlined">south_east</span>
+			<Icon icon={isOpen ? 'south_east' : 'north_west'} />
 		</button>
 		<ul class="drawerContents" bind:this={drawerContents}>
 			<li class="list-item">
@@ -158,14 +187,20 @@
 				</div>
 			</li>
 			<li class="list-item">
-				<div class="defaultNodes" draggable="true" on:dragstart={handleDragStart}>Node</div>
+				<div
+					role="presentation"
+					class="defaultNodes"
+					draggable="true"
+					on:dragstart={handleDragStart}
+				>
+					Node
+				</div>
 			</li>
 		</ul>
 	</slot>
 </nav>
 
 <style>
-	@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0');
 	#drawerWrapper {
 		position: absolute;
 		width: 35px;
@@ -248,11 +283,6 @@
 			);
 	}
 
-	span {
-		font-family: 'Material Symbols Outlined';
-		font-size: 1.2rem;
-		color: inherit;
-	}
 	.defaultNodes {
 		margin: auto;
 		margin-top: 15px;

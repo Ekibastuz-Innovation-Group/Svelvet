@@ -12,3 +12,6 @@ vite.config.ts.timestamp-*
 .VSCodeCounter
 /.vscode
 .vscode
+.idea
+svelvet-file-tree.txt
+script.txt

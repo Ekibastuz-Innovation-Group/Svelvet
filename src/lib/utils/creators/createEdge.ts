@@ -23,6 +23,8 @@ export function createEdge(
 		width: writable(config?.width || 0),
 		animated: writable(config?.animated || false),
 		rendered: writable(false),
+		start: config?.start || null,
+		end: config?.end || null,
 		data: config?.data
 	};
 	// if (config?.raiseEdges) writableEdge.raiseEdgeOnSelect = true;

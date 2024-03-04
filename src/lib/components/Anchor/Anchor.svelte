@@ -12,10 +12,17 @@
 		Connections,
 		CSSColorString,
 		EdgeStyle,
+		EndStyle,
 		EdgeConfig,
-		ConnectEdges
+    ConnectEdges
 	} from '$lib/types';
-	import type { Anchor, Direction, AnchorKey, CustomWritable } from '$lib/types';
+	import type {
+		Anchor,
+		Direction,
+		AnchorKey,
+		CustomWritable,
+		AnchorConnectionEvent
+	} from '$lib/types';
 	import type { InputType, NodeKey, OutputStore, InputStore, ConnectingFrom } from '$lib/types';
 	import type { ComponentType } from 'svelte';
 	import type { Writable, Readable } from 'svelte/store';
@@ -51,6 +58,7 @@
 	const graphEdge = getContext<ComponentType>('graphEdge');
 	const nodeConnectEvent = getContext<Writable<null | MouseEvent>>('nodeConnectEvent');
 	const anchorsMounted = getContext<Writable<number>>('anchorsMounted');
+	const flowChart = getContext<object>('flowchart') || undefined;
 
 	export let bgColor: CSSColorString | null = null;
 	export let id: string | number = 0;
@@ -90,6 +98,7 @@
 	 */
 	export let nodeConnect = false;
 	export let edgeStyle: EdgeStyle | null = null;
+	export let endStyles: Array<EndStyle> = [null, null];
 	/**
 	 * @default 'false'
 	 * @description When `true`, the default Anchor will not be rendered. It is not necessary to set this to true
@@ -101,7 +110,8 @@
 		graphDirection === 'TD' ? (input ? 'north' : 'south') : input ? 'west' : 'east';
 	export let title = '';
 
-	const dispatch = createEventDispatcher();
+	const dispatchConnection = createEventDispatcher<{ connection: AnchorConnectionEvent }>();
+	const dispatchDisconnection = createEventDispatcher();
 
 	let anchorElement: HTMLDivElement;
 	let tracking = false;
@@ -147,6 +157,7 @@
 			if (anchor.type === 'output') acc++;
 			return acc;
 		}, 0);
+
 		if ($nodeLevelConnections?.length && !input) {
 			const remainingConnections: Connections = [];
 			let first: number | null = null;
@@ -196,11 +207,12 @@
 
 	$: if (dynamic && anchorElement) changeAnchorSide(anchorElement, $dynamicDirection, node);
 
-	$: if (!input && $anchorsMounted && $anchorsMounted === node.anchors.count()) {
-		const poppedConnections = $nodeLevelConnections?.pop();
-		if (poppedConnections) connections.push(poppedConnections);
-		connections = connections;
-	}
+	// $: if (!input && $anchorsMounted && $anchorsMounted === node.anchors.count()) {
+	// 	console.log('Popping');
+	// 	const poppedConnections = $nodeLevelConnections?.pop();
+	// 	if (poppedConnections) connections.push(poppedConnections);
+	// 	connections = connections;
+	// }
 
 	$: if ($mounted === nodeStore.count() && connections.length) {
 		checkDirectConnections();
@@ -236,14 +248,72 @@
 	// We track previous connections and fire a correct event accordingly
 	$: if ($connectedAnchors) {
 		if ($connectedAnchors.size < previousConnectionCount) {
-			dispatch('disconnection', { node, anchor });
+			// Need to add additional detail for disconnections here
+			dispatchDisconnection('disconnection', { node, anchor });
 		} else if ($connectedAnchors.size > previousConnectionCount) {
-			dispatch('connection', { node, anchor });
+			const anchorArray = Array.from($connectedAnchors);
+			const lastConnection = anchorArray[anchorArray.length - 1];
+			dispatchConnection('connection', {
+				node,
+				anchor,
+				connectedNode: lastConnection.node,
+				connectedAnchor: lastConnection
+			});
 		}
 		previousConnectionCount = $connectedAnchors.size;
 	}
 
-	function handleMouseUp(e: MouseEvent) {
+	function touchBasedConnection(e: TouchEvent) {
+		edgeStore.delete('cursor');
+
+		const touchPosition = {
+			x: e.changedTouches[0].clientX,
+			y: e.changedTouches[0].clientY
+		};
+
+		// This retrieves the child element at the touch position
+		const otherAnchor = document.elementFromPoint(touchPosition.x, touchPosition.y);
+
+		if (!otherAnchor) return;
+
+		// This retrieves the parent element of the anchor, which has the ID
+		const parentElement = otherAnchor.parentElement;
+
+		if (!parentElement) return;
+
+		const compoundId: AnchorKey = parentElement.id as AnchorKey;
+
+		const nodeId = compoundId.split('/')[1] as NodeKey;
+
+		const connectingAnchor = nodeStore.get(nodeId)?.anchors.get(compoundId);
+
+		if (!connectingAnchor) return;
+
+		edgeStore.delete('cursor');
+
+		attemptConnection(anchor, connectingAnchor, e);
+	}
+
+	function attemptConnection(source: Anchor, target: Anchor, e: MouseEvent | TouchEvent) {
+		const success = connectAnchors(source, target);
+
+		if (success) {
+			connectStores();
+		}
+
+		if (!e.shiftKey) {
+			clearLinking(success);
+		}
+	}
+
+	function handleMouseUp(e: MouseEvent | TouchEvent) {
+		// Touchend events fire on the original element rather than the "curent one"
+		// So we need to check for this case and retieve the anchor to connect to
+		if ('changedTouches' in e && connecting) {
+			touchBasedConnection(e);
+			return;
+		}
+
 		if (connecting) return; // If the anchor initiated the connection, do nothing
 
 		// If the anchor receiving the event has connections
@@ -259,14 +329,14 @@
 		if ($connectingFrom) connectEdge(e);
 	}
 
-	function handleClick(e: MouseEvent) {
+	function handleClick(e: MouseEvent | TouchEvent) {
 		if (locked) return; // Return if the anchor is locked
 
 		// If the Anchor being clicked has connections
 		// And it can't have multiple connections
 		// And there isn't an active connection being made
 		// Then this is a disconnection event
-		if ($connectedAnchors?.size && !multiple && !$connectingFrom) return disconnect();
+		if ($connectedAnchors?.size && !multiple && !$connectingFrom) return disconnectEdge();
 
 		// If there isn't an active connection being made, start a new edge
 		if (!$connectingFrom) return startEdge();
@@ -305,13 +375,15 @@
 
 		if (disconnect) edgeConfig.disconnect = true;
 		if (edgeStyle) edgeConfig.type = edgeStyle;
+		if (endStyles[0]) edgeConfig.start = endStyles[0];
+		if (endStyles[1]) edgeConfig.start = endStyles[1];
 		// Create a temporary edge to track the cursor
 		const newEdge = createEdge({ source, target }, source?.edge || null, edgeConfig);
 		// Add the edge to the store
 		edgeStore.add(newEdge, 'cursor');
 	}
 
-	function connectEdge(e: MouseEvent) {
+	function connectEdge(e: MouseEvent | TouchEvent) {
 		// Delete the temporary edge
 		edgeStore.delete('cursor');
 
@@ -346,14 +418,7 @@
 			target = $connectingFrom.anchor;
 		}
 
-		const success = connectAnchors(source, target);
-		if (success) {
-			connectStores();
-		}
-
-		if (!e.shiftKey) {
-			clearLinking(success);
-		}
+		attemptConnection(source, target, e);
 	}
 
 	// Updates the connected anchors set on source and target
@@ -368,7 +433,29 @@
 			label: { text: edgeLabel }
 		};
 
+		// get edge style from flowchart if edge is defined in flowchart
+		if (flowChart) {
+			// check if source is in flowchart and target is a child of the source
+			const sourceId: string = source.node.id.slice(2);
+			const sourceInFlowchart = flowChart.nodeList[sourceId]; // type flowchart node obj
+			// if source is in flowchart
+			if (sourceInFlowchart) {
+				const targetId: string = target.node.id.slice(2);
+				const targetInSourceChildren = sourceInFlowchart.children.filter(
+					(child) => child.node.id === targetId
+				)[0];
+				// check to see if target is its child
+				if (targetInSourceChildren) {
+					// configure the edge with data defined in the flowchart
+					const edgeData = targetInSourceChildren;
+					edgeConfig.label = { text: edgeData.content };
+				}
+			}
+		}
+
 		if (edgeStyle) edgeConfig.type = edgeStyle;
+		if (endStyles[0]) edgeConfig.start = endStyles[0];
+		if (endStyles[1]) edgeConfig.start = endStyles[1];
 		const newEdge = createEdge({ source, target }, source?.edge || null, edgeConfig);
 		if (!source.node || !target.node) return false;
 		edgeStore.add(newEdge, new Set([source, target, source.node, target.node]));
@@ -387,11 +474,15 @@
 		};
 
 		if (edgeStyle) edgeConfig.type = edgeStyle;
+		if (endStyles[0]) edgeConfig.start = endStyles[0];
+		if (endStyles[1]) edgeConfig.start = endStyles[1];
 		const newEdge = createEdge({ source, target }, source?.edge || null, edgeConfig);
 		if (!source.node || !target.node) return false;
 		edgeStore.add(newEdge, new Set([source, target, source.node, target.node]));
 		return true;
 	}
+
+	
 
 	// If both anchors have stores, we "link" them
 	function connectStores() {
@@ -436,6 +527,7 @@
 
 	// Destroy the edge and disconnect the anchors/stores
 	function destroy() {
+		// return;
 		edgeStore.delete('cursor');
 
 		// Get all edges connected to this anchor
@@ -449,7 +541,7 @@
 	}
 
 	// Disconnect edge and create a new cursor edge
-	function disconnect() {
+	function disconnectEdge() {
 		if (get(anchor.connected).size > 1) return;
 
 		const source = Array.from(get(anchor.connected))[0];
@@ -489,13 +581,24 @@
 	}
 
 	function checkDirectConnections() {
-		connections.forEach((connection, index) => {
+		connections.forEach((connection) => {
 			if (!connection) return;
-			const connected = processConnection(connection);
-			if (connected) connections[index] = null;
+			processConnection(connection);
+			// if (connected) connections[index] = null;
 		});
 
-		connections = connections.filter((connection) => connection !== null);
+		// connections = connections.filter((connection) => connection !== null);
+	}
+
+	export function disconnect(target: [string | number, string | number]) {
+		const nodekey: NodeKey = `N-${target[0]}`;
+		const node = nodeStore.get(nodekey);
+		if (!node) return;
+		const targetAnchor = node.anchors.get(`A-${target[1]}/N-${target[0]}`);
+		if (!targetAnchor) return;
+		const edgeKey = edgeStore.match(anchor, targetAnchor);
+		if (!edgeKey) return;
+		edgeStore.delete(edgeKey[0]);
 	}
 
 	const processConnection = (connection: [string | number, string | number] | string | number) => {
@@ -622,12 +725,16 @@
 <div
 	id={anchor?.id}
 	class="anchor-wrapper"
+	role="button"
+	tabindex="0"
 	class:locked
 	title={title || ''}
 	on:mouseenter={() => (hovering = true)}
 	on:mouseleave={() => (hovering = false)}
 	on:mousedown|stopPropagation|preventDefault={handleClick}
 	on:mouseup|stopPropagation={handleMouseUp}
+	on:touchstart|stopPropagation|preventDefault={handleClick}
+	on:touchend|stopPropagation={handleMouseUp}
 	bind:this={anchorElement}
 >
 	<slot linked={$connectedAnchors?.size >= 1} {hovering} {connecting}>
@@ -644,7 +751,7 @@
 	</slot>
 </div>
 
-{#each Array.from($connectedAnchors) as target}
+{#each Array.from($connectedAnchors) as target (target.id)}
 	{@const edge = edgeStore.fetch(anchor, target)}
 	{#if edge && edge.source === anchor}
 		{@const CustomEdge = edge.component}
